@@ -3,8 +3,7 @@ from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
-os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+
 
 mcp = FastMCP("GPT-4o MCP")
 
