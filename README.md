@@ -478,9 +478,9 @@ logging.basicConfig(level=logging.INFO)
 
 ## 📝 작성 정보
 
-- **제목**: MCP 서버 실습 종합 가이드
-- **작성자**: AI 어시스턴트
-- **작성일**: 2024년 12월
+- **제목**: MCP 서버 실습 정리 문서서
+- **작성자**: AI 어시스턴트, 사용자 본인
+- **작성일**: 2025년 08월 ~
 - **실습 환경**: Windows 10, Python 3.13.7
 - **사용 기술**: MCP, LangChain, OpenAI API, Chroma DB, python-dotenv
 - **보안 기능**: 환경 변수를 통한 API 키 관리
