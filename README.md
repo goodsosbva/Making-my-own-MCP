@@ -1,8 +1,8 @@
-# 🚀 MCP 서버 실습 종합 가이드
+# 🚀 MCP 실습 및 실무에 적용하기
 
 ## 📋 프로젝트 개요
 
-이 프로젝트는 **MCP(Model Context Protocol) 서버**를 구축하고 다양한 AI 도구들을 연동하는 실습 프로젝트입니다. 수학 연산, 파일 검색, PDF 기반 RAG 시스템, Office 문서 처리 등 다양한 기능을 MCP 프로토콜을 통해 제공합니다.
+이 프로젝트는 **MCP(Model Context Protocol) 서버**를 구축하고 다양한 AI 도구들을 연동하는 실습 프로젝트입니다. 수학 연산, 파일 검색, PDF 기반 RAG 시스템, Office 문서 처리, 웹 검색 등 다양한 기능을 MCP 프로토콜을 통해 제공합니다.
 
 ### 🎯 실습 목표
 
@@ -11,6 +11,7 @@
 - LangChain을 활용한 RAG 시스템 구축
 - AI 모델과 외부 도구의 연동 방법 학습
 - 보안을 고려한 API 키 관리 방법 습득
+- 실무 환경에서 활용 가능한 AI 도구 개발
 
 ---
 
@@ -33,6 +34,8 @@ test-server/
 │   ├── mcp_rag_practice_summary.pdf
 │   ├── 실습_가이드.html
 │   └── 실습_정리.md
+├── 📁 web-search-server/        # 웹 검색 MCP 서버
+│   └── main.py                  # Tavily API 기반 웹 검색
 └── 📁 test-server/              # 기존 테스트 코드들
     ├── mcp_client.py
     ├── mcp_server.py
@@ -263,6 +266,74 @@ def ask_office(query: str) -> str:
 
 ---
 
+## 🌐 4. 웹 검색 서버 (Web Search Server)
+
+Tavily API를 활용한 웹 검색 및 요약 시스템입니다.
+
+### 주요 기능
+
+- **실시간 웹 검색**: Tavily API를 통한 최신 정보 검색
+- **AI 기반 요약**: GPT-4를 활용한 검색 결과 요약
+- **다양한 검색 옵션**: 검색 깊이, 결과 수 등 설정 가능
+- **에러 처리**: 안정적인 오류 처리 및 로깅
+
+### 핵심 코드
+
+```python
+def search_web_tavily(query: str) -> str:
+    url = "https://api.tavily.com/search"
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "api_key": TAVILY_API_KEY,
+        "query": query,
+        "search_depth": "basic",
+        "include_answer": True,
+        "max_results": 5
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        results = response.json().get("results", [])
+
+        if not results:
+            return "검색 결과가 없습니다."
+
+        contents = "\n\n".join([f"{r['title']}\n{r['content']}" for r in results])
+        return contents
+
+    except Exception as e:
+        logging.error(f"Tavily 검색 오류: {e}")
+        return "검색 중 오류가 발생했습니다."
+```
+
+### MCP 도구 등록
+
+```python
+@mcp.tool()
+def web_search(query: str) -> str:
+    """웹에서 검색한 결과를 요약해 제공합니다."""
+    logging.info(f"검색 요청: {query}")
+    content = search_web_tavily(query)
+
+    try:
+        summary = llm.invoke(f"다음 검색 결과를 한 문단으로 요약해줘:\n\n{content}")
+        # 다양한 반환 타입에 대응하여 문자열로 변환
+        if hasattr(summary, 'content'):
+            result = summary.content
+        elif hasattr(summary, 'text'):
+            result = summary.text
+        else:
+            result = str(summary)
+        return result
+
+    except Exception as e:
+        logging.error(f"LLM 호출 오류: {e}")
+        return f"요약 생성 중 오류가 발생했습니다: {str(e)}"
+```
+
+---
+
 ## 🔐 보안 및 API 키 관리
 
 ### 보안을 고려한 API 키 관리
@@ -294,6 +365,7 @@ os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 ```bash
 # rag-server/.env
 OPENAI_API_KEY=sk-your-actual-api-key-here
+TAVILY_API_KEY=your-tavily-api-key-here
 ```
 
 #### 2. 시스템 환경 변수 설정
@@ -301,9 +373,11 @@ OPENAI_API_KEY=sk-your-actual-api-key-here
 ```bash
 # Windows
 set OPENAI_API_KEY=sk-your-actual-api-key-here
+set TAVILY_API_KEY=your-tavily-api-key-here
 
 # Linux/Mac
 export OPENAI_API_KEY=sk-your-actual-api-key-here
+export TAVILY_API_KEY=your-tavily-api-key-here
 ```
 
 ---
@@ -330,6 +404,10 @@ export OPENAI_API_KEY=sk-your-actual-api-key-here
     "office-server": {
       "command": "C:/Python313/python.exe",
       "args": ["C:/Users/admin/test-server/rag-server/office.py"]
+    },
+    "web-search-server": {
+      "command": "C:/Python313/python.exe",
+      "args": ["C:/Users/admin/test-server/web-search-server/main.py"]
     }
   }
 }
@@ -349,12 +427,13 @@ python-dotenv
 python-docx
 pandas
 openpyxl
+requests
 ```
 
 ### 설치 명령어
 
 ```bash
-pip install mcp-server-fastmcp langchain langchain-openai langchain-community chromadb pypdf python-dotenv python-docx pandas openpyxl
+pip install mcp-server-fastmcp langchain langchain-openai langchain-community chromadb pypdf python-dotenv python-docx pandas openpyxl requests
 ```
 
 ---
@@ -381,6 +460,10 @@ python main.py
 # Office RAG 서버
 cd rag-server
 python office.py
+
+# 웹 검색 서버
+cd web-search-server
+python main.py
 ```
 
 ### 2. MCP 클라이언트에서 사용
@@ -391,6 +474,7 @@ Cursor, Claude Desktop 등 MCP를 지원하는 클라이언트에서 도구를 �
 - **파일 검색**: `find_file("document")`
 - **PDF 질문**: `ask_pdf("이 문서의 주요 내용은?")`
 - **Office 질문**: `ask_office("엑셀 데이터에서 어떤 정보를 찾을 수 있나요?")`
+- **웹 검색**: `web_search("최신 AI 기술 동향")`
 
 ---
 
@@ -403,9 +487,11 @@ Cursor, Claude Desktop 등 MCP를 지원하는 클라이언트에서 도구를 �
 ✅ 파일 검색 시스템 구축
 ✅ PDF 기반 RAG 시스템 구축
 ✅ Office 문서 기반 RAG 시스템 구축
+✅ 웹 검색 및 AI 요약 시스템 구축
 ✅ LangChain과 MCP의 연동
 ✅ 보안을 고려한 API 키 관리
 ✅ dotenv를 통한 환경 변수 관리
+✅ 다양한 문서 형식 처리 능력
 
 ### 학습된 핵심 개념
 
@@ -415,6 +501,7 @@ Cursor, Claude Desktop 등 MCP를 지원하는 클라이언트에서 도구를 �
 - **LangChain 체인**: 복잡한 AI 워크플로우 구성
 - **보안 모범 사례**: API 키의 안전한 관리 방법
 - **문서 처리**: 다양한 형식의 문서 처리 방법
+- **웹 API 연동**: 외부 서비스와의 안전한 통신
 
 ---
 
@@ -425,10 +512,11 @@ Cursor, Claude Desktop 등 MCP를 지원하는 클라이언트에서 도구를 �
 | 문제                     | 원인                 | 해결 방법                                      |
 | ------------------------ | -------------------- | ---------------------------------------------- |
 | MCP 도구가 인식되지 않음 | 서버가 실행되지 않음 | MCP 서버 재시작                                |
-| API 키 오류              | 환경 변수 미설정     | .env 파일 또는 환경 변수에 OPENAI_API_KEY 설정 |
+| API 키 오류              | 환경 변수 미설정     | .env 파일 또는 환경 변수에 API 키 설정         |
 | PDF 파일을 찾을 수 없음  | 경로 오류            | PDF_PATH 경로 확인                             |
 | dotenv 관련 오류         | python-dotenv 미설치 | `pip install python-dotenv` 실행               |
 | Office 문서 처리 오류    | 관련 패키지 미설치   | `pip install python-docx pandas openpyxl` 실행 |
+| 웹 검색 오류             | Tavily API 키 오류   | TAVILY_API_KEY 환경 변수 확인                  |
 
 ### 로깅 활용
 
@@ -447,6 +535,7 @@ logging.basicConfig(level=logging.INFO)
 - [ ] 웹 인터페이스 구축
 - [ ] 더 많은 문서 형식 지원 (PPT, TXT 등)
 - [ ] 성능 최적화 및 캐싱 구현
+- [ ] 추가 검색 엔진 지원 (Google, Bing 등)
 
 ### 중장기 목표
 
@@ -454,35 +543,44 @@ logging.basicConfig(level=logging.INFO)
 - [ ] 사용자 인증 및 권한 관리
 - [ ] API 엔드포인트 제공
 - [ ] 실시간 문서 업데이트 지원
+- [ ] 멀티모달 AI 모델 연동
 
 ---
 
 ## 🎉 결론
 
-이번 실습을 통해 MCP 서버의 기본 구조와 다양한 AI 도구들의 구현 방법을 학습했습니다. 수학 연산부터 문서 처리까지 폭넓은 기능을 MCP 프로토콜을 통해 제공할 수 있게 되었습니다.
+이번 실습을 통해 MCP 서버의 기본 구조와 다양한 AI 도구들의 구현 방법을 학습했습니다. 수학 연산부터 문서 처리, 웹 검색까지 폭넓은 기능을 MCP 프로토콜을 통해 제공할 수 있게 되었습니다.
 
 ### 핵심 성과
 
 - **MCP 프로토콜**을 통한 도구 등록 및 관리
 - **LangChain**을 활용한 RAG 시스템 구축
 - **다양한 문서 형식** 처리 능력 습득
+- **웹 검색 및 AI 요약** 시스템 구축
 - **AI 모델과 외부 도구**의 연동 방법 습득
 - **보안을 고려한 API 키 관리** 방법 습득
 - **실무 적용 가능한** AI 도구 개발 경험
 
 ### 실무 적용 가능성
 
-이번 실습에서 학습한 내용은 문서 검색 시스템, 지능형 챗봇, 자동화 도구, 데이터 분석 시스템 등 다양한 AI 애플리케이션 개발에 활용할 수 있습니다.
+이번 실습에서 학습한 내용은 다음과 같은 실무 환경에 적용할 수 있습니다:
+
+- **문서 검색 시스템**: 기업 내부 문서의 지능형 검색
+- **지능형 챗봇**: 고객 지원 및 FAQ 시스템
+- **자동화 도구**: 반복 작업의 AI 기반 자동화
+- **데이터 분석 시스템**: 문서 기반 데이터 인사이트 도출
+- **웹 모니터링**: 특정 주제에 대한 실시간 웹 정보 수집
+- **지식 관리 시스템**: 조직의 지식을 체계적으로 관리
 
 ---
 
 ## 📝 작성 정보
 
-- **제목**: MCP 서버 실습 정리 문서서
+- **제목**: MCP 실습 및 실무에 적용하기
 - **작성자**: AI 어시스턴트, 사용자 본인
-- **작성일**: 2025년 08월 ~
+- **작성일**: 2024년 12월
 - **실습 환경**: Windows 10, Python 3.13.7
-- **사용 기술**: MCP, LangChain, OpenAI API, Chroma DB, python-dotenv
+- **사용 기술**: MCP, LangChain, OpenAI API, Chroma DB, python-dotenv, Tavily API
 - **보안 기능**: 환경 변수를 통한 API 키 관리
 
 ---
@@ -493,7 +591,8 @@ logging.basicConfig(level=logging.INFO)
 - [LangChain 공식 문서](https://python.langchain.com/)
 - [OpenAI API 문서](https://platform.openai.com/docs)
 - [Chroma DB 문서](https://docs.trychroma.com/)
+- [Tavily API 문서](https://tavily.com/docs)
 
 ---
 
-_이 문서는 MCP 서버와 다양한 AI 도구들의 실습 과정을 종합 정리한 것입니다. 최신 코드의 보안 기능과 환경 변수 관리 방법이 반영되어 있습니다._
+_이 문서는 MCP 서버와 다양한 AI 도구들의 실습 과정을 종합 정리한 것입니다. 최신 코드의 보안 기능과 환경 변수 관리 방법이 반영되어 있으며, 실무 적용 가능성을 고려하여 작성되었습니다._
